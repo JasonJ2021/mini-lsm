@@ -2,9 +2,12 @@
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
 use std::cmp::{self};
+use std::collections::binary_heap::PeekMut;
 use std::collections::BinaryHeap;
+use std::mem::swap;
+use std::thread::current;
 
-use anyhow::Result;
+use anyhow::{anyhow, Error, Ok, Result};
 
 use crate::key::KeySlice;
 
@@ -42,12 +45,31 @@ impl<I: StorageIterator> Ord for HeapWrapper<I> {
 /// iterators, perfer the one with smaller index.
 pub struct MergeIterator<I: StorageIterator> {
     iters: BinaryHeap<HeapWrapper<I>>,
-    current: HeapWrapper<I>,
+    current: Option<HeapWrapper<I>>,
 }
 
 impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
-        unimplemented!()
+        if iters.len() == 0 {
+            return MergeIterator {
+                iters: BinaryHeap::<HeapWrapper<I>>::new(),
+                current: None,
+            };
+        }
+        let mut heap = BinaryHeap::<HeapWrapper<I>>::new();
+        for (idx, item) in iters.into_iter().enumerate() {
+            if !item.is_valid() {
+                continue;
+            }
+            heap.push(HeapWrapper(idx, item));
+        }
+        assert!(heap.len() >= 1);
+        let cur = heap.pop().unwrap();
+        let res = MergeIterator {
+            iters: heap,
+            current: Some(cur),
+        };
+        return res;
     }
 }
 
@@ -57,18 +79,73 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
     type KeyType<'a> = KeySlice<'a>;
 
     fn key(&self) -> KeySlice {
-        unimplemented!()
+        return self.current.as_ref().unwrap().1.key();
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        return self.current.as_ref().unwrap().1.value();
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        return self.current.is_some() && self.current.as_ref().unwrap().1.is_valid();
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        // find out first iterator's key not same with current
+        let cur_key = self.key().to_key_vec();
+        let current = self.current.as_mut().unwrap();
+        let mut cur_item_valid = current.1.is_valid();
+        while current.1.is_valid() {
+            if current.1.next().is_ok()
+                && current.1.is_valid()
+                && current.1.key() != cur_key.as_key_slice()
+            {
+                break;
+            } else {
+                cur_item_valid = false;
+            }
+        }
+        // self.current is:
+        // 1. invalid
+        // 2. point to a larger key
+        while let Some(mut inner_iter) = self.iters.peek_mut() {
+            // filter all iter with first key equal to cur_key
+            // TODO: this IF seems can be deleted
+            if inner_iter.1.is_valid() {
+                let top_key = inner_iter.1.key();
+                if top_key != cur_key.as_key_slice() {
+                    break;
+                } else {
+                    let ans = inner_iter.1.next();
+                    if ans.is_err() {
+                        PeekMut::pop(inner_iter);
+                        return Err(anyhow!(
+                            "Next returns an error due to disk failure, network failure etc."
+                        ));
+                    }
+                    if !inner_iter.1.is_valid() {
+                        PeekMut::pop(inner_iter);
+                    }
+                }
+            } else {
+                PeekMut::pop(inner_iter);
+            }
+        }
+        let top_item = self.iters.peek_mut();
+        if cur_item_valid {
+            if let Some(mut top_item) = top_item {
+                if current.1.key() > top_item.1.key()
+                    || (current.1.key() == top_item.1.key() && current.0 > top_item.0)
+                {
+                    swap(current, &mut *top_item);
+                }
+            }
+        } else {
+            if let Some(top_item) = top_item {
+                let new_item = PeekMut::pop(top_item);
+                self.current = Some(new_item);
+            }
+        }
+        Ok(())
     }
 }

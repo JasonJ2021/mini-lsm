@@ -1,17 +1,21 @@
 #![allow(dead_code)] // REMOVE THIS LINE after fully implementing this functionality
 
+use std::fmt::UpperExp;
+use std::io::Read;
 use std::ops::Bound;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use bytes::Bytes;
 use crossbeam_skiplist::SkipMap;
+use nom::AsBytes;
 use ouroboros::self_referencing;
+use rand::distributions::uniform::UniformSampler;
 
 use crate::iterators::StorageIterator;
-use crate::key::KeySlice;
+use crate::key::{Key, KeySlice};
 use crate::table::SsTableBuilder;
 use crate::wal::Wal;
 
@@ -100,7 +104,21 @@ impl MemTable {
 
     /// Get an iterator over a range of keys.
     pub fn scan(&self, _lower: Bound<&[u8]>, _upper: Bound<&[u8]>) -> MemTableIterator {
-        unimplemented!()
+        // let iter = self.map.range((_lower, _upper));
+        // MemTableIterator {
+        //    map: self.map.clone(),
+        //    iter: self.map.range((_lower, _upper))  ,
+        //    item:
+        // }
+        let (_lower, _upper) = (map_bound(_lower), map_bound(_upper));
+        let mut iter = MemTableIteratorBuilder {
+            map: self.map.clone(),
+            iter_builder: |map: &Arc<SkipMap<Bytes, Bytes>>| map.range((_lower, _upper)),
+            item: (Bytes::new(), Bytes::new()),
+        }
+        .build();
+        iter.next().unwrap();
+        iter
     }
 
     /// Flush the mem-table to SSTable. Implement in week 1 day 6.
@@ -146,18 +164,29 @@ impl StorageIterator for MemTableIterator {
     type KeyType<'a> = KeySlice<'a>;
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        return self.borrow_item().1.as_bytes();
     }
 
     fn key(&self) -> KeySlice {
-        unimplemented!()
+        let item = self.borrow_item().0.as_bytes();
+        let key = Key::from_slice(item);
+        return key;
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        // self.with_iter(|iter| (*iter).peekable().peek().is_none())
+        return self.borrow_item().0.len() > 0;
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        self.with_mut(|fields| {
+            let cur = (fields).iter.next();
+            if let Some(cur) = cur {
+                *fields.item = (cur.key().clone(), cur.value().clone());
+            } else {
+                *fields.item = (Bytes::new(), Bytes::new());
+            }
+        });
+        Ok(())
     }
 }
