@@ -1,9 +1,9 @@
 #![allow(unused_variables)] // TODO(you): remove this lint after implementing this mod
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
-use bytes::BufMut;
+use bytes::{BufMut, Bytes};
 
-use crate::key::{KeySlice, KeyVec};
+use crate::key::{KeyBytes, KeySlice, KeyVec};
 
 use super::Block;
 
@@ -76,5 +76,8 @@ impl BlockBuilder {
     pub fn cur_blk_size(&self) -> usize {
         // data + offsets + num_of_elements(2 bytes)
         return self.data.len() + self.offsets.len() * 2 + std::mem::size_of::<u16>();
+    }
+    pub fn get_first_key(&self) -> KeyBytes {
+        return KeyBytes::from_bytes(Bytes::copy_from_slice(self.first_key.raw_ref()));
     }
 }
