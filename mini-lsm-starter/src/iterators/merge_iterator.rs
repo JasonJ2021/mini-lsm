@@ -62,12 +62,16 @@ impl<I: StorageIterator> MergeIterator<I> {
             }
             heap.push(HeapWrapper(idx, item));
         }
-        assert!(!heap.is_empty());
-        let cur = heap.pop().unwrap();
+        // assert!(!heap.is_empty());
+        let current = if heap.is_empty() {
+            None
+        } else {
+            Some(heap.pop().unwrap())
+        };
 
         MergeIterator {
             iters: heap,
-            current: Some(cur),
+            current,
         }
     }
 }

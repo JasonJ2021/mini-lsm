@@ -2,29 +2,49 @@
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
 use core::panic;
+use std::ops::Bound;
 
 use anyhow::{bail, Result};
+use bytes::Bytes;
+use nom::AsBytes;
 
 use crate::{
-    iterators::{merge_iterator::MergeIterator, StorageIterator},
+    iterators::{
+        merge_iterator::MergeIterator, two_merge_iterator::TwoMergeIterator, StorageIterator,
+    },
     mem_table::MemTableIterator,
+    table::SsTableIterator,
 };
 
+/// Create a bound of `Bytes` from a bound of `&[u8]`.
+pub(crate) fn get_bound_inner(bound: Bound<&[u8]>) -> Bytes {
+    match bound {
+        Bound::Included(x) => Bytes::copy_from_slice(x),
+        Bound::Excluded(x) => Bytes::copy_from_slice(x),
+        Bound::Unbounded => Bytes::new(),
+    }
+}
+
 /// Represents the internal type for an LSM iterator. This type will be changed across the tutorial for multiple times.
-type LsmIteratorInner = MergeIterator<MemTableIterator>;
+type LsmIteratorInner =
+    TwoMergeIterator<MergeIterator<MemTableIterator>, MergeIterator<SsTableIterator>>;
 
 pub struct LsmIterator {
     inner: LsmIteratorInner,
+    end_bound: Bound<Bytes>,
 }
 
 impl LsmIterator {
-    pub(crate) fn new(mut iter: LsmIteratorInner) -> Result<Self> {
+    pub(crate) fn new(mut iter: LsmIteratorInner, end_bound: Bound<Bytes>) -> Result<Self> {
         // Remove all delete (key, value) pair in iter
         // If iterator is been tainted in this process, just throw an error
         while iter.is_valid() && iter.value().is_empty() {
             iter.next()?;
         }
-        Ok(Self { inner: iter })
+        Ok(Self {
+            inner: iter,
+            end_bound,
+        })
     }
 }
 
@@ -32,7 +52,13 @@ impl StorageIterator for LsmIterator {
     type KeyType<'a> = &'a [u8];
 
     fn is_valid(&self) -> bool {
-        self.inner.is_valid()
+        return self.inner.is_valid() && {
+            match &self.end_bound {
+                Bound::Unbounded => true,
+                Bound::Excluded(end_bound) => self.key() < end_bound.as_bytes(),
+                Bound::Included(end_bound) => self.key() <= end_bound.as_bytes(),
+            }
+        };
     }
 
     fn key(&self) -> &[u8] {

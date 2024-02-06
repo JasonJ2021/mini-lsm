@@ -240,11 +240,6 @@ impl SsTable {
 
         while blk_idx < self.block_meta.len() {
             let block_meta = self.block_meta.get(blk_idx).unwrap();
-            println!(
-                "{:?}, {:?}",
-                block_meta.first_key.as_key_slice(),
-                block_meta.last_key.as_key_slice()
-            );
             if (block_meta.first_key.as_key_slice() <= key
                 && block_meta.last_key.as_key_slice() >= key)
                 || (block_meta.first_key.as_key_slice() > key)
