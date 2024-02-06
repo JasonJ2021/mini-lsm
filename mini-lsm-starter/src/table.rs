@@ -7,7 +7,7 @@ mod iterator;
 
 use std::cmp::Ordering;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -199,12 +199,11 @@ impl SsTable {
             io::ErrorKind::OutOfMemory,
             "Block index out of Bound",
         ))?;
-        let block_size;
-        if block_idx == self.block_meta.len() - 1 {
-            block_size = self.block_meta_offset - block_meta.offset;
+        let block_size = if block_idx == self.block_meta.len() - 1 {
+            self.block_meta_offset - block_meta.offset
         } else {
-            block_size = self.block_meta.get(block_idx + 1).unwrap().offset - block_meta.offset;
-        }
+            self.block_meta.get(block_idx + 1).unwrap().offset - block_meta.offset
+        };
         let block_data = self
             .file
             .read(block_meta.offset as u64, block_size as u64)?;
@@ -246,11 +245,10 @@ impl SsTable {
                 block_meta.first_key.as_key_slice(),
                 block_meta.last_key.as_key_slice()
             );
-            if block_meta.first_key.as_key_slice() <= key
-                && block_meta.last_key.as_key_slice() >= key
+            if (block_meta.first_key.as_key_slice() <= key
+                && block_meta.last_key.as_key_slice() >= key)
+                || (block_meta.first_key.as_key_slice() > key)
             {
-                return blk_idx;
-            } else if block_meta.first_key.as_key_slice() > key {
                 return blk_idx;
             }
             blk_idx += 1;

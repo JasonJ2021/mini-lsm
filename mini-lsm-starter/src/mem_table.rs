@@ -10,7 +10,6 @@ use bytes::Bytes;
 use crossbeam_skiplist::SkipMap;
 use nom::AsBytes;
 use ouroboros::self_referencing;
-use rand::distributions::uniform::UniformSampler;
 
 use crate::iterators::StorageIterator;
 use crate::key::{Key, KeySlice};
