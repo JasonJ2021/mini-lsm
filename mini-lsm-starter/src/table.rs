@@ -11,7 +11,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 pub use builder::SsTableBuilder;
 use bytes::{Buf, BufMut};
 pub use iterator::SsTableIterator;
@@ -213,7 +213,14 @@ impl SsTable {
 
     /// Read a block from disk, with block cache. (Day 4)
     pub fn read_block_cached(&self, block_idx: usize) -> Result<Arc<Block>> {
-        unimplemented!()
+        if let Some(block_cache) = self.block_cache.as_ref() {
+            let block_cache = block_cache.clone();
+            return block_cache
+                .try_get_with((self.id, block_idx), || self.read_block(block_idx))
+                .map_err(|err| anyhow!("{}", err));
+        } else {
+            return self.read_block(block_idx);
+        }
     }
 
     /// Find the block that may contain `key`.
@@ -230,7 +237,8 @@ impl SsTable {
         // If all blocks' first_key > key, return first block idx
         if blk_idx >= self.block_meta.len() {
             return 0;
-        
+        }
+
         while blk_idx < self.block_meta.len() {
             let block_meta = self.block_meta.get(blk_idx).unwrap();
             println!(
