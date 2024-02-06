@@ -16,7 +16,7 @@ pub use builder::SsTableBuilder;
 use bytes::{Buf, BufMut};
 pub use iterator::SsTableIterator;
 
-use crate::block::{self, Block};
+use crate::block::Block;
 use crate::key::{KeyBytes, KeySlice};
 use crate::lsm_storage::BlockCache;
 
@@ -33,7 +33,7 @@ pub struct BlockMeta {
 }
 impl PartialOrd for BlockMeta {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        return Some(self.cmp(other));
+        Some(self.cmp(other))
     }
 }
 impl Ord for BlockMeta {
@@ -159,7 +159,7 @@ impl SsTable {
         if let Some(blk) = block_meta.last() {
             last_key.clone_from(&blk.last_key);
         }
-        return Ok(SsTable {
+        Ok(SsTable {
             file,
             block_meta,
             block_meta_offset,
@@ -170,7 +170,7 @@ impl SsTable {
             last_key,
             bloom: None,
             max_ts: 0,
-        });
+        })
     }
 
     /// Create a mock SST with only first key + last key metadata
@@ -215,11 +215,11 @@ impl SsTable {
     pub fn read_block_cached(&self, block_idx: usize) -> Result<Arc<Block>> {
         if let Some(block_cache) = self.block_cache.as_ref() {
             let block_cache = block_cache.clone();
-            return block_cache
+            block_cache
                 .try_get_with((self.id, block_idx), || self.read_block(block_idx))
-                .map_err(|err| anyhow!("{}", err));
+                .map_err(|err| anyhow!("{}", err))
         } else {
-            return self.read_block(block_idx);
+            self.read_block(block_idx)
         }
     }
 

@@ -1,7 +1,5 @@
 #![allow(dead_code)] // REMOVE THIS LINE after fully implementing this functionality
 
-use std::fmt::UpperExp;
-use std::io::Read;
 use std::ops::Bound;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -170,12 +168,12 @@ impl StorageIterator for MemTableIterator {
     fn key(&self) -> KeySlice {
         let item = self.borrow_item().0.as_bytes();
         let key = Key::from_slice(item);
-        return key;
+        key
     }
 
     fn is_valid(&self) -> bool {
         // self.with_iter(|iter| (*iter).peekable().peek().is_none())
-        return self.borrow_item().0.len() > 0;
+        return !self.borrow_item().0.is_empty();
     }
 
     fn next(&mut self) -> Result<()> {

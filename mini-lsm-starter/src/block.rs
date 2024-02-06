@@ -23,7 +23,7 @@ impl Block {
             blk.put_u16(offset);
         }
         blk.put_u16(self.offsets.len() as u16);
-        return Bytes::from(blk);
+        Bytes::from(blk)
     }
 
     /// Decode from the data layout, transform the input `data` to a single `Block`
@@ -36,9 +36,9 @@ impl Block {
         for _ in 0..num_of_elements {
             offsets_sec.push(offsets_ptr.get_u16());
         }
-        return Block {
+        Block {
             data: data_sec,
             offsets: offsets_sec,
-        };
+        }
     }
 }

@@ -4,13 +4,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{Error, Ok, Result};
+use anyhow::{Ok, Result};
 use bytes::{BufMut, Bytes};
 
 use super::{BlockMeta, SsTable};
 use crate::{
-    block::{Block, BlockBuilder},
-    key::{Key, KeyBytes, KeySlice},
+    block::BlockBuilder,
+    key::{KeyBytes, KeySlice},
     lsm_storage::BlockCache,
     table::FileObject,
 };
@@ -34,7 +34,7 @@ impl SsTableBuilder {
             last_key: Vec::new(),
             data: Vec::new(),
             meta: Vec::new(),
-            block_size: block_size,
+            block_size,
         }
     }
 
@@ -77,7 +77,7 @@ impl SsTableBuilder {
     /// Since the data blocks contain much more data than meta blocks, just return the size of data
     /// blocks here.
     pub fn estimated_size(&self) -> usize {
-        return self.data.len();
+        self.data.len()
     }
 
     /// Builds the SSTable and writes it to the given path. Use the `FileObject` structure to manipulate the disk objects.

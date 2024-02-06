@@ -27,7 +27,7 @@ impl BlockBuilder {
         BlockBuilder {
             offsets: Vec::new(),
             data: Vec::new(),
-            block_size: block_size,
+            block_size,
             first_key: KeyVec::new(),
             prev_entry_size: 0,
         }
@@ -58,24 +58,24 @@ impl BlockBuilder {
         self.offsets
             .push(self.offsets.last().unwrap() + self.prev_entry_size as u16);
         self.prev_entry_size = key_len as usize + value_len as usize + 4;
-        return true;
+        true
     }
 
     /// Check if there is no key-value pair in the block.
     pub fn is_empty(&self) -> bool {
-        return self.data.len() == 0;
+        self.data.len() == 0
     }
 
     /// Finalize the block.
     pub fn build(self) -> Block {
-        return Block {
+        Block {
             data: self.data,
             offsets: self.offsets,
-        };
+        }
     }
     pub fn cur_blk_size(&self) -> usize {
         // data + offsets + num_of_elements(2 bytes)
-        return self.data.len() + self.offsets.len() * 2 + std::mem::size_of::<u16>();
+        self.data.len() + self.offsets.len() * 2 + std::mem::size_of::<u16>()
     }
     pub fn get_first_key(&self) -> KeyBytes {
         return KeyBytes::from_bytes(Bytes::copy_from_slice(self.first_key.raw_ref()));

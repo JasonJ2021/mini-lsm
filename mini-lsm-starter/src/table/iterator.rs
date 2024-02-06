@@ -46,7 +46,7 @@ impl SsTableIterator {
     /// Note: You probably want to review the handout for detailed explanation when implementing
     /// this function.
     pub fn seek_to_key(&mut self, key: KeySlice) -> Result<()> {
-        let blk_idx = self.table.find_block_idx(key.clone());
+        let blk_idx = self.table.find_block_idx(key);
         if self.blk_idx == blk_idx {
             self.blk_iter.seek_to_key(key);
         } else {

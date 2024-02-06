@@ -5,9 +5,8 @@ use std::cmp::{self};
 use std::collections::binary_heap::PeekMut;
 use std::collections::BinaryHeap;
 use std::mem::swap;
-use std::thread::current;
 
-use anyhow::{anyhow, Error, Ok, Result};
+use anyhow::{anyhow, Ok, Result};
 
 use crate::key::KeySlice;
 
@@ -50,7 +49,7 @@ pub struct MergeIterator<I: StorageIterator> {
 
 impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
-        if iters.len() == 0 {
+        if iters.is_empty() {
             return MergeIterator {
                 iters: BinaryHeap::<HeapWrapper<I>>::new(),
                 current: None,
@@ -63,13 +62,13 @@ impl<I: StorageIterator> MergeIterator<I> {
             }
             heap.push(HeapWrapper(idx, item));
         }
-        assert!(heap.len() >= 1);
+        assert!(!heap.is_empty());
         let cur = heap.pop().unwrap();
-        let res = MergeIterator {
+
+        MergeIterator {
             iters: heap,
             current: Some(cur),
-        };
-        return res;
+        }
     }
 }
 
@@ -140,11 +139,9 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
                     swap(current, &mut *top_item);
                 }
             }
-        } else {
-            if let Some(top_item) = top_item {
-                let new_item = PeekMut::pop(top_item);
-                self.current = Some(new_item);
-            }
+        } else if let Some(top_item) = top_item {
+            let new_item = PeekMut::pop(top_item);
+            self.current = Some(new_item);
         }
         Ok(())
     }

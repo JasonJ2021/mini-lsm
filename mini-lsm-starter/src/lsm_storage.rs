@@ -283,7 +283,7 @@ impl LsmStorageInner {
         let state = self.state.read();
         let value_in_memtable = state.memtable.get(_key);
         if let Some(value) = value_in_memtable {
-            if value.len() > 0 {
+            if !value.is_empty() {
                 return Ok(Some(value));
             } else {
                 return Ok(None);
@@ -292,7 +292,7 @@ impl LsmStorageInner {
         for imm_table in &state.imm_memtables {
             let value_in_immemtable = imm_table.get(_key);
             if let Some(value) = value_in_immemtable {
-                if value.len() > 0 {
+                if !value.is_empty() {
                     return Ok(Some(value));
                 } else {
                     return Ok(None);
@@ -386,6 +386,6 @@ impl LsmStorageInner {
             iters.push(Box::new(imm_memtable.scan(_lower, _upper)));
         }
         let final_iter = FusedIterator::new(LsmIterator::new(MergeIterator::create(iters))?);
-        return Ok(final_iter);
+        Ok(final_iter)
     }
 }

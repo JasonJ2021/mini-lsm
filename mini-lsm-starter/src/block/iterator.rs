@@ -58,13 +58,13 @@ impl BlockIterator {
 
     /// Returns the value of the current entry.
     pub fn value(&self) -> &[u8] {
-        return &self.block.data[self.value_range.0..self.value_range.1];
+        &self.block.data[self.value_range.0..self.value_range.1]
     }
 
     /// Returns true if the iterator is valid.
     /// Note: You may want to make use of `key`
     pub fn is_valid(&self) -> bool {
-        return !self.key.is_empty();
+        !self.key.is_empty()
     }
 
     /// Seeks to the first key in the block.

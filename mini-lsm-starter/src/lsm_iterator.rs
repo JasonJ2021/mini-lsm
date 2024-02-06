@@ -21,7 +21,7 @@ impl LsmIterator {
     pub(crate) fn new(mut iter: LsmIteratorInner) -> Result<Self> {
         // Remove all delete (key, value) pair in iter
         // If iterator is been tainted in this process, just throw an error
-        while iter.is_valid() && iter.value().len() == 0 {
+        while iter.is_valid() && iter.value().is_empty() {
             iter.next()?;
         }
         Ok(Self { inner: iter })
@@ -32,7 +32,7 @@ impl StorageIterator for LsmIterator {
     type KeyType<'a> = &'a [u8];
 
     fn is_valid(&self) -> bool {
-        return self.inner.is_valid();
+        self.inner.is_valid()
     }
 
     fn key(&self) -> &[u8] {
@@ -45,7 +45,7 @@ impl StorageIterator for LsmIterator {
 
     fn next(&mut self) -> Result<()> {
         self.inner.next()?;
-        while self.inner.is_valid() && self.inner.value().len() == 0 {
+        while self.inner.is_valid() && self.inner.value().is_empty() {
             self.inner.next()?;
         }
         Ok(())
@@ -71,7 +71,7 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
     type KeyType<'a> = I::KeyType<'a> where Self: 'a;
 
     fn is_valid(&self) -> bool {
-        return !self.has_error && self.iter.is_valid();
+        !self.has_error && self.iter.is_valid()
     }
 
     fn key(&self) -> Self::KeyType<'_> {
