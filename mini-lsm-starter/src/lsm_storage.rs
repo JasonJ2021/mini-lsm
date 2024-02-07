@@ -1,6 +1,7 @@
 #![allow(dead_code)] // REMOVE THIS LINE after fully implementing this functionality
 
 use std::collections::HashMap;
+use std::fs;
 use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicUsize;
@@ -23,7 +24,7 @@ use crate::lsm_iterator::{get_bound_inner, FusedIterator, LsmIterator};
 use crate::manifest::Manifest;
 use crate::mem_table::{map_bound, MemTable};
 use crate::mvcc::LsmMvccInner;
-use crate::table::{SsTable, SsTableIterator};
+use crate::table::{SsTable, SsTableBuilder, SsTableIterator};
 
 pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
 
@@ -158,7 +159,21 @@ impl Drop for MiniLsm {
 
 impl MiniLsm {
     pub fn close(&self) -> Result<()> {
-        unimplemented!()
+        self.flush_notifier.send(())?;
+        self.compaction_notifier.send(())?;
+        let flush_thread = self.flush_thread.lock().take();
+        let compact_thread = self.compaction_thread.lock().take();
+        if let Some(flush_thread) = flush_thread {
+            flush_thread
+                .join()
+                .expect("Couldn't join on the flush thread");
+        }
+        if let Some(compact_thread) = compact_thread {
+            compact_thread
+                .join()
+                .expect("Couldn't join on the compact thread");
+        }
+        Ok(())
     }
 
     /// Start the storage engine by either loading an existing directory or creating a new one if the directory does
@@ -255,6 +270,10 @@ impl LsmStorageInner {
             ),
             CompactionOptions::NoCompaction => CompactionController::NoCompaction,
         };
+        // Create LSM database directory if it doesn't exist
+        if !path.exists() {
+            fs::create_dir(path)?;
+        }
 
         let storage = Self {
             state: Arc::new(RwLock::new(Arc::new(state))),
@@ -327,7 +346,7 @@ impl LsmStorageInner {
             } else if key > _key {
                 return Ok(None);
             } else {
-                sst_iter.next();
+                sst_iter.next()?;
             }
         }
 
@@ -341,6 +360,7 @@ impl LsmStorageInner {
 
     /// Put a key-value pair into the storage by writing into the current memtable.
     pub fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> {
+        // Note: Never hold ReadLock while acquiring state_lock mutex
         if self.memtable_reach_capacity() {
             let state_lock = self.state_lock.lock();
             if self.memtable_reach_capacity() {
@@ -397,7 +417,36 @@ impl LsmStorageInner {
 
     /// Force flush the earliest-created immutable memtable to disk
     pub fn force_flush_next_imm_memtable(&self) -> Result<()> {
-        unimplemented!()
+        // 1. Select a memtable to flush
+        let snapshot = {
+            let guard = self.state.read();
+            // imm_memtables is FIFO, so we don't need to worry about imm_memtable changing
+            if let Some(imm_memtable) = guard.imm_memtables.last() {
+                imm_memtable.clone()
+            } else {
+                return Ok(());
+            }
+        };
+        // 2. Create an SST file corresponding to a memtable
+        let mut builder = SsTableBuilder::new(self.options.block_size);
+        // flush memtable content to SsTableBuilder
+        snapshot.flush(&mut builder)?;
+        let new_sst_table = Arc::new(builder.build(
+            snapshot.id(),
+            Some(self.block_cache.clone()),
+            self.path_of_sst(snapshot.id()),
+        )?);
+        // 3. Remove the memtable from the immutable memtable list and add the SST file to L0 SSTs
+        let _state_lock = self.state_lock.lock();
+        let mut state_guard = self.state.write();
+        let mut new_lsm_state = state_guard.as_ref().clone();
+        let _ = new_lsm_state.imm_memtables.pop().unwrap();
+        new_lsm_state.l0_sstables.insert(0, new_sst_table.sst_id());
+        new_lsm_state
+            .sstables
+            .insert(new_sst_table.sst_id(), new_sst_table);
+        *state_guard = Arc::new(new_lsm_state);
+        Ok(())
     }
 
     pub fn new_txn(&self) -> Result<()> {
