@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::ops::Bound;
+use std::ops::{Bound, RangeBounds};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -328,10 +328,16 @@ impl LsmStorageInner {
         let mut sst_iters = Vec::new();
         for sst_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables.get(sst_id).unwrap().clone();
-            sst_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
-                table,
-                KeySlice::from_slice(_key),
-            )?));
+            if key_within(
+                _key,
+                table.first_key().as_key_slice(),
+                table.last_key().as_key_slice(),
+            ) {
+                sst_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
+                    table,
+                    KeySlice::from_slice(_key),
+                )?));
+            }
         }
         let mut sst_iter = MergeIterator::create(sst_iters);
         while sst_iter.is_valid() {
@@ -478,10 +484,17 @@ impl LsmStorageInner {
         let lower_bound = KeyBytes::from_bytes(get_bound_inner(_lower.clone()));
         for sst_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables.get(sst_id).unwrap().clone();
-            sst_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
-                table,
-                lower_bound.as_key_slice(),
-            )?));
+            if range_overlap(
+                table.first_key().as_key_slice(),
+                table.last_key().as_key_slice(),
+                _lower,
+                _upper,
+            ) {
+                sst_iters.push(Box::new(SsTableIterator::create_and_seek_to_key(
+                    table,
+                    lower_bound.as_key_slice(),
+                )?));
+            }
         }
         let upper_bound = map_bound(_upper.clone());
         let final_iter = FusedIterator::new(LsmIterator::new(
@@ -493,4 +506,44 @@ impl LsmStorageInner {
         )?);
         Ok(final_iter)
     }
+}
+
+// return whether start_key <= key <= end_key
+fn key_within(key: &[u8], start_key: KeySlice, end_key: KeySlice) -> bool {
+    return start_key.raw_ref() <= key && key <= end_key.raw_ref();
+}
+
+fn range_overlap(
+    start_key: KeySlice,
+    end_key: KeySlice,
+    lower: Bound<&[u8]>,
+    upper: Bound<&[u8]>,
+) -> bool {
+    match lower {
+        Bound::Included(lower) => {
+            if lower > end_key.raw_ref() {
+                return false;
+            }
+        }
+        Bound::Excluded(lower) => {
+            if lower >= end_key.raw_ref() {
+                return false;
+            }
+        }
+        Bound::Unbounded => {}
+    }
+    match upper {
+        Bound::Included(upper) => {
+            if upper < start_key.raw_ref() {
+                return false;
+            }
+        }
+        Bound::Excluded(upper) => {
+            if upper <= start_key.raw_ref() {
+                return false;
+            }
+        }
+        Bound::Unbounded => {}
+    }
+    true
 }
